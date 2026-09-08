@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: quality-dashboard-demo
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 22.12.0
+      - key: JIRA_BASE_URL
+        sync: false
+      - key: JIRA_EMAIL
+        sync: false
+      - key: JIRA_API_TOKEN
+        sync: false
+      - key: JIRA_PROJECT_KEY
+        sync: false
+      - key: ZEPHYR_API_BASE_URL
+        sync: false
+      - key: ZEPHYR_API_TOKEN
+        sync: false

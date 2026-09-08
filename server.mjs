@@ -30,12 +30,31 @@ const issueSeed = [
 ].map(([key, summary, type, status]) => ({ key, summary, type, status, priority: 'Medium', assignee: 'Atharv Porwal', parent: 'DD-1', points: null }));
 
 function seedDashboard() {
-  return buildDashboard(issueSeed, false, 'Local verified DD-1 snapshot. Configure Jira credentials to refresh live.');
+  return buildDashboard(issueSeed, false, 'Local verified DD-1 snapshot. Configure Jira credentials to refresh live.', pendingZephyrQuality());
 }
 
 function number(value) { return Number.isFinite(value) ? value : 0; }
 
-function buildDashboard(issues, live, notice) {
+function pendingZephyrQuality(status = 'Awaiting live Zephyr sync') {
+  return {
+    live: false,
+    testCases: 8,
+    testCycles: 1,
+    testPlans: 0,
+    executions: 0,
+    passed: 0,
+    failed: 0,
+    blocked: 0,
+    notExecuted: 0,
+    passRate: null,
+    status,
+    source: 'zephyr-demo-import.csv',
+    cycles: [],
+    plans: []
+  };
+}
+
+function buildDashboard(issues, live, notice, quality = pendingZephyrQuality()) {
   const isEpic = item => /epic/i.test(item.type);
   const workItems = issues.filter(item => !isEpic(item));
   const counts = { todo: 0, inProgress: 0, done: 0 };
@@ -74,17 +93,19 @@ function buildDashboard(issues, live, notice) {
   })).sort((a, b) => a.key === 'UNASSIGNED' ? 1 : b.key === 'UNASSIGNED' ? -1 : a.key.localeCompare(b.key));
   const total = workItems.length;
   return {
-    project: { key: process.env.JIRA_PROJECT_KEY || 'DD', name: 'DashBoard Demo', sprint: 'DD Sprint 1', sprintDates: '7 Sep – 21 Sep 2026' },
-    connection: { jira: live ? 'Live Jira Cloud' : 'Snapshot mode', zephyr: process.env.ZEPHYR_API_TOKEN ? 'Configured — adapter pending validation' : 'Import / API connection pending', updatedAt: new Date().toISOString(), notice },
+    project: { key: process.env.JIRA_PROJECT_KEY || 'DD', name: 'Quality Dashboard', sprint: 'DD Sprint 1', sprintDates: '7 Sep – 21 Sep 2026' },
+    connection: { jira: live ? 'Live Jira Cloud' : 'Snapshot mode', zephyr: quality.live ? 'Live Zephyr Cloud' : 'Zephyr sync unavailable', updatedAt: new Date().toISOString(), notice },
     metrics: { total, todo: counts.todo, inProgress: counts.inProgress, done: counts.done, completion: total ? Math.round((counts.done / total) * 100) : 0, points: workItems.reduce((sum, item) => sum + number(item.points), 0) },
     epics: sortedEpics,
-    quality: { importedCases: 8, testCycles: 1, executed: null, passed: null, failed: null, status: 'Awaiting live Zephyr sync', source: 'zephyr-demo-import.csv' }
+    quality
   };
 }
 
-async function fetchJiraDashboard() {
+async function fetchJiraIssues() {
   const { JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN, JIRA_PROJECT_KEY = 'DD' } = process.env;
-  if (!JIRA_BASE_URL || !JIRA_EMAIL || !JIRA_API_TOKEN) return seedDashboard();
+  if (!JIRA_BASE_URL || !JIRA_EMAIL || !JIRA_API_TOKEN) {
+    return { issues: issueSeed, live: false, notice: 'Local verified DD-1 snapshot. Configure Jira credentials to refresh live.' };
+  }
   const auth = Buffer.from(`${JIRA_EMAIL}:${JIRA_API_TOKEN}`).toString('base64');
   const fields = ['summary', 'status', 'issuetype', 'priority', 'assignee', 'parent', 'subtasks', 'created', 'updated', 'duedate', 'customfield_10016', 'customfield_10020'];
   const url = new URL('/rest/api/3/search/jql', JIRA_BASE_URL);
@@ -106,7 +127,80 @@ async function fetchJiraDashboard() {
     points: typeof item.customfield_10016 === 'number' ? item.customfield_10016 : null,
     updated: item.updated
   }));
-  return buildDashboard(issues, true, `Live Jira data for ${JIRA_PROJECT_KEY}. Zephyr sync is configured separately.`);
+  return { issues, live: true, notice: `Live Jira and Zephyr data for ${JIRA_PROJECT_KEY}.` };
+}
+
+function zephyrRegion(baseUrl) {
+  const host = new URL(baseUrl).hostname;
+  if (host.startsWith('eu.')) return 'EU';
+  if (host.startsWith('au.')) return 'AU';
+  if (host.startsWith('de.')) return 'DE';
+  return 'US';
+}
+
+async function fetchZephyrCollection(resource) {
+  const { ZEPHYR_API_BASE_URL, ZEPHYR_API_TOKEN, JIRA_PROJECT_KEY = 'DD' } = process.env;
+  if (!ZEPHYR_API_BASE_URL || !ZEPHYR_API_TOKEN) throw new Error('Zephyr API URL or token is missing.');
+  const values = [];
+  let startAt = 0;
+  const maxResults = 1000;
+  while (true) {
+    const url = new URL(`${ZEPHYR_API_BASE_URL.replace(/\/$/, '')}/${resource}`);
+    url.searchParams.set('projectKey', JIRA_PROJECT_KEY);
+    url.searchParams.set('maxResults', String(maxResults));
+    url.searchParams.set('startAt', String(startAt));
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${ZEPHYR_API_TOKEN}`, Accept: 'application/json' } });
+    if (!response.ok) throw new Error(`Zephyr ${resource} returned ${response.status}. Check the regional API URL, token, and project permissions.`);
+    const payload = await response.json();
+    const page = Array.isArray(payload.values) ? payload.values : [];
+    values.push(...page);
+    if (payload.isLast !== false || page.length === 0) break;
+    startAt += Number(payload.maxResults) || page.length;
+  }
+  return values;
+}
+
+async function fetchZephyrQuality() {
+  const { ZEPHYR_API_BASE_URL, ZEPHYR_API_TOKEN } = process.env;
+  if (!ZEPHYR_API_BASE_URL || !ZEPHYR_API_TOKEN) return pendingZephyrQuality('Zephyr credentials are not configured.');
+  const [testCases, cycles, plans, executions, statuses] = await Promise.all([
+    fetchZephyrCollection('testcases'),
+    fetchZephyrCollection('testcycles'),
+    fetchZephyrCollection('testplans'),
+    fetchZephyrCollection('testexecutions'),
+    fetchZephyrCollection('statuses')
+  ]);
+  const statusNames = new Map(statuses.map(status => [status.id, status.name]));
+  const executionStatus = execution => statusNames.get(execution.testExecutionStatus?.id) || 'Unknown';
+  const countStatus = name => executions.filter(execution => executionStatus(execution).toLowerCase() === name.toLowerCase()).length;
+  const passed = countStatus('Pass');
+  const failed = countStatus('Fail');
+  const blocked = countStatus('Blocked');
+  const notExecuted = countStatus('Not Executed');
+  return {
+    live: true,
+    testCases: testCases.length,
+    testCycles: cycles.length,
+    testPlans: plans.length,
+    executions: executions.length,
+    passed,
+    failed,
+    blocked,
+    notExecuted,
+    passRate: executions.length ? Math.round((passed / executions.length) * 100) : 0,
+    status: 'Live Zephyr Cloud sync',
+    source: `Zephyr Cloud API (${zephyrRegion(ZEPHYR_API_BASE_URL)} region)`,
+    cycles: cycles.map(cycle => ({ key: cycle.key, name: cycle.name, status: statusNames.get(cycle.status?.id) || 'Unknown' })),
+    plans: plans.map(plan => ({ key: plan.key, name: plan.name, status: statusNames.get(plan.status?.id) || 'Unknown' }))
+  };
+}
+
+async function fetchDashboard() {
+  const [jira, zephyr] = await Promise.all([
+    fetchJiraIssues(),
+    fetchZephyrQuality().catch(error => pendingZephyrQuality(error.message))
+  ]);
+  return buildDashboard(jira.issues, jira.live, jira.notice, zephyr);
 }
 
 const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml' };
@@ -115,8 +209,12 @@ function reply(res, code, body, type = 'application/json; charset=utf-8') { res.
 await parseEnv();
 createServer(async (req, res) => {
   const path = new URL(req.url, `http://${req.headers.host}`).pathname;
+  if (path === '/api/health') {
+    reply(res, 200, JSON.stringify({ status: 'ok' }));
+    return;
+  }
   if (path === '/api/dashboard') {
-    try { reply(res, 200, JSON.stringify(await fetchJiraDashboard())); }
+    try { reply(res, 200, JSON.stringify(await fetchDashboard())); }
     catch (error) { reply(res, 502, JSON.stringify({ error: error.message, ...seedDashboard() })); }
     return;
   }
@@ -124,5 +222,11 @@ createServer(async (req, res) => {
   const file = normalize(join(root, 'public', requested));
   if (!file.startsWith(join(root, 'public'))) return reply(res, 403, 'Forbidden', 'text/plain');
   try { await stat(file); reply(res, 200, await readFile(file), mime[extname(file)] || 'application/octet-stream'); }
-  catch { reply(res, 404, 'Not found', 'text/plain'); }
-}).listen(port, () => console.log(`Dashboard running on http://localhost:${port}`));
+  catch {
+    if (/^\/(epics|quality)(\/|$)/.test(path)) {
+      reply(res, 200, await readFile(join(root, 'public', 'index.html')), mime['.html']);
+      return;
+    }
+    reply(res, 404, 'Not found', 'text/plain');
+  }
+}).listen(port, '0.0.0.0', () => console.log(`Dashboard running on http://localhost:${port}`));
