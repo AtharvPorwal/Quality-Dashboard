@@ -1,6 +1,6 @@
 # Quality Dashboard
 
-This is a local, read-only dashboard for Jira project `DD`. It displays delivery health, an epic-first work-item hierarchy, and a Zephyr quality area.
+This is a local, read-only dashboard for Jira spaces. It displays delivery health, PI and sprint analytics, an epic-first work-item hierarchy, and Zephyr quality for the selected space.
 
 ## Start it
 
@@ -9,11 +9,23 @@ This is a local, read-only dashboard for Jira project `DD`. It displays delivery
 3. Set `ZEPHYR_API_BASE_URL` and `ZEPHYR_API_TOKEN` to enable the live Zephyr Cloud quality metrics. This tenant uses the EU API base URL.
 4. Run `npm start` and open `http://localhost:4173`.
 
+## Space, PI, and sprint configuration
+
+- Set `JIRA_SPACE_KEYS` to a comma-separated list such as `DD,LP`. The first space is selected by default.
+- `JIRA_PI_FIELD_ID` identifies the Jira `PI` multi-select field. The dashboard-demo field is `customfield_10074`.
+- `JIRA_SPRINT_FIELD_ID` identifies the Jira `Sprints` multi-select field. The dashboard-demo field is `customfield_10075`.
+- The program view presents four PIs and six sprints per PI. Delivery metrics are calculated from the first PI and sprint value assigned to each non-epic work item.
+- Assignment warnings identify missing values, multiple selections, and cases where the sprint belongs to a different PI.
+- PI and sprint status cards come from each Jira space's Story workflow. New Jira statuses appear automatically, including statuses with zero assigned stories.
+- The selected space is stored in the URL as `?space=DD`, so overview, epic, and quality links remain space-specific and can be shared.
+- `GET /api/dashboard?space=DD` returns the selected space, the full configured space list, PI/sprint analytics, delivery metrics, epics, work items, and Zephyr quality data.
+- `GET /api/spaces` returns the configured space keys for lightweight discovery.
+
 Without credentials, the dashboard intentionally uses a verified local snapshot of Epic `DD-1`; the UI is still fully usable.
 
 ## Live Jira permissions
 
-The Atlassian account backing the token needs only **Browse Projects** permission for `DD`. The server calls Jira from the local machine; credentials are never exposed to the browser.
+The Atlassian account backing the token needs only **Browse Projects** permission for the configured spaces. The server calls Jira from the local machine; credentials are never exposed to the browser.
 
 ## Live Zephyr Cloud connection
 
