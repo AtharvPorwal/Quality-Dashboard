@@ -49,6 +49,7 @@ function shell(content, active = 'overview') {
         <button class="icon-button" id="refresh" aria-label="Refresh dashboard" title="Refresh dashboard">${icons.refresh}</button>
       </header>
       ${content}
+      <footer class="site-signature">Made by <strong>Atharv</strong></footer>
     </main>
     <nav class="mobile-nav" aria-label="Mobile navigation">
       <a href="${routeHref('/')}" data-route class="${active === 'overview' ? 'active' : ''}">${icons.overview}<span>Overview</span></a>
