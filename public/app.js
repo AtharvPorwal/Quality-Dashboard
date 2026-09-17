@@ -317,7 +317,8 @@ function renderQuality() {
       ${qualityStat('Test cases', q.testCases, 'indigo', 'Total library')}
       ${qualityStat('Executions', q.executions, 'blue', `${executed} completed`)}
       ${qualityStat('Passed', q.passed, 'green', q.passRate === null ? 'No rate yet' : `${q.passRate}% pass rate`)}
-      ${qualityStat('Failed', q.failed, 'coral', `${q.blocked} blocked`)}
+      ${qualityStat('Failed', q.failed, 'coral', `${pct(q.failed, qTotal)}% of executions`)}
+      ${qualityStat('Blocked', q.blocked, 'amber', `${pct(q.blocked, qTotal)}% of executions`)}
     </section>
     <section class="quality-layout">
       <article class="card distribution-card">
