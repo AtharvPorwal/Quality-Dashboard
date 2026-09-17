@@ -12,6 +12,7 @@ const icons = {
   program: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16M4 12h16M4 19h16"/><circle cx="8" cy="5" r="2"/><circle cx="14" cy="12" r="2"/><circle cx="10" cy="19" r="2"/></svg>',
   quality: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.8 2.8 8.2 7 10 4.2-1.8 7-5.2 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg>',
   refresh: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 8A7 7 0 0 1 18.5 6.5L20 9M4 15l1.5 2.5A7 7 0 0 0 17.9 16"/></svg>',
+  disconnect: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5"/><path d="m16 16 4-4-4-4M20 12H9"/></svg>',
   arrow: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>',
   trend: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16 5-5 4 4 7-8"/><path d="M15 7h5v5"/></svg>',
   bolt: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13 2-9 12h7l-1 8 9-12h-7l1-8Z"/></svg>'
@@ -45,8 +46,11 @@ function shell(content, active = 'overview') {
     <main class="workspace">
       <header class="topbar">
         <div class="mobile-brand"><span class="brand-mark">Q</span><strong>Quality Dashboard</strong></div>
-        <label class="space-switch"><span>Space</span><select id="space-select" aria-label="Select Jira space">${dashboard.spaces.map(space => `<option value="${esc(space.key)}" ${space.key === dashboard.space.key ? 'selected' : ''}>${esc(space.name || space.key)} (${esc(space.key)})</option>`).join('')}</select></label>
-        <button class="icon-button" id="refresh" aria-label="Refresh dashboard" title="Refresh dashboard">${icons.refresh}</button>
+        <div class="topbar-actions">
+          <label class="space-switch"><span>Space</span><select id="space-select" aria-label="Select Jira space">${dashboard.spaces.map(space => `<option value="${esc(space.key)}" ${space.key === dashboard.space.key ? 'selected' : ''}>${esc(space.name || space.key)} (${esc(space.key)})</option>`).join('')}</select></label>
+          <button class="icon-button" id="refresh" aria-label="Refresh dashboard" title="Refresh dashboard">${icons.refresh}</button>
+          <button class="disconnect-button" id="disconnect" type="button">${icons.disconnect}<span>Disconnect</span></button>
+        </div>
       </header>
       ${content}
       <footer class="site-signature">Made by <strong>Atharv</strong></footer>
@@ -343,8 +347,83 @@ function renderNotFound() {
   bindGlobalEvents();
 }
 
+function renderConnect(message = '') {
+  document.title = 'Connect · Quality Dashboard';
+  app.innerHTML = `<main class="connect-page">
+    <section class="connect-intro">
+      <a class="connect-brand" href="/connect"><span class="brand-mark">Q</span><span>Quality Dashboard</span></a>
+      <div class="connect-copy">
+        <span class="connect-kicker">JIRA + ZEPHYR CLOUD</span>
+        <h1>Bring delivery and quality into one clear view.</h1>
+        <p>Connect your tools to see every accessible Jira space, PI and sprint progress, epics, and live Zephyr quality data.</p>
+        <div class="connect-points"><span><i>1</i> Credentials stay in server memory only</span><span><i>2</i> Session automatically expires after one hour</span><span><i>3</i> Disconnect instantly at any time</span></div>
+      </div>
+      <p class="connect-signature">Made by <strong>Atharv</strong></p>
+    </section>
+    <section class="connect-panel">
+      <form class="connect-card" id="connect-form">
+        <div class="connect-heading"><span class="eyebrow">SECURE CONNECTION</span><h2>Connect your workspace</h2><p>Enter the credentials for the Jira and Zephyr accounts you want to view.</p></div>
+        <fieldset><legend><span>1</span> Jira Cloud</legend>
+          <label>Jira URL<input name="jiraUrl" type="url" inputmode="url" autocomplete="url" placeholder="https://your-company.atlassian.net" required></label>
+          <label>Jira email<input name="jiraEmail" type="email" autocomplete="username" placeholder="you@company.com" required></label>
+          <label>Jira API token<input name="jiraApiToken" type="password" autocomplete="off" placeholder="Enter Jira API token" required></label>
+        </fieldset>
+        <fieldset><legend><span>2</span> Zephyr Cloud</legend>
+          <label>Zephyr region<select name="zephyrRegion" required><option value="">Select region</option><option value="EU">Europe</option><option value="US">United States</option><option value="AU">Australia</option><option value="DE">Germany</option></select></label>
+          <label>Zephyr API token<input name="zephyrApiToken" type="password" autocomplete="off" placeholder="Enter Zephyr API token" required></label>
+        </fieldset>
+        <p class="connect-error" id="connect-error" ${message ? '' : 'hidden'}>${esc(message)}</p>
+        <button class="connect-submit" type="submit"><span>Connect and open dashboard</span>${icons.arrow}</button>
+        <p class="privacy-note">Your credentials are never saved to disk or returned to this browser.</p>
+      </form>
+    </section>
+  </main>`;
+  document.querySelector('#connect-form')?.addEventListener('submit', connect);
+}
+
+async function connect(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('.connect-submit');
+  const error = form.querySelector('#connect-error');
+  const data = new FormData(form);
+  button.disabled = true;
+  button.querySelector('span').textContent = 'Checking connections…';
+  error.hidden = true;
+  try {
+    const response = await fetch('/api/connect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.fromEntries(data.entries()))
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Connection failed.');
+    form.reset();
+    history.replaceState({}, '', '/');
+    await load();
+  } catch (connectionError) {
+    error.textContent = connectionError.message || 'Connection failed. Check your credentials and try again.';
+    error.hidden = false;
+  } finally {
+    button.disabled = false;
+    button.querySelector('span').textContent = 'Connect and open dashboard';
+  }
+}
+
+async function disconnect() {
+  const button = document.querySelector('#disconnect');
+  if (button) button.disabled = true;
+  try { await fetch('/api/disconnect', { method: 'POST' }); }
+  finally {
+    dashboard = undefined;
+    history.replaceState({}, '', '/connect');
+    renderConnect('You have been disconnected.');
+  }
+}
+
 function bindGlobalEvents() {
   document.querySelector('#refresh')?.addEventListener('click', load);
+  document.querySelector('#disconnect')?.addEventListener('click', disconnect);
   document.querySelector('#space-select')?.addEventListener('change', event => {
     const url = new URL(location.href);
     url.searchParams.set('space', event.target.value);
@@ -358,6 +437,7 @@ function jiraLiveLabel() {
 }
 
 function renderRoute() {
+  document.title = 'Quality Dashboard';
   const path = decodeURIComponent(location.pathname.replace(/\/$/, '') || '/');
   if (path === '/') renderOverview();
   else if (path === '/pis') renderProgram();
@@ -375,8 +455,16 @@ async function load() {
   try {
     const selectedSpace = new URLSearchParams(location.search).get('space');
     const response = await fetch(`/api/dashboard${selectedSpace ? `?space=${encodeURIComponent(selectedSpace)}` : ''}`);
-    dashboard = await response.json();
+    const result = await response.json();
+    if (response.status === 401 || result.code === 'SESSION_REQUIRED') {
+      dashboard = undefined;
+      history.replaceState({}, '', '/connect');
+      renderConnect(selectedSpace ? 'Your one-hour session has expired. Connect again to continue.' : '');
+      return;
+    }
+    dashboard = result;
     if (!response.ok && !dashboard.metrics) throw new Error(dashboard.error || 'Dashboard request failed');
+    if (location.pathname === '/connect') history.replaceState({}, '', '/');
     if (!selectedSpace || selectedSpace !== dashboard.space.key) {
       const url = new URL(location.href);
       url.searchParams.set('space', dashboard.space.key);
@@ -392,7 +480,7 @@ async function load() {
 
 document.addEventListener('click', event => {
   const link = event.target.closest('[data-route]');
-  if (!link) return;
+  if (!link || !dashboard) return;
   event.preventDefault();
   history.pushState({}, '', link.getAttribute('href'));
   renderRoute();

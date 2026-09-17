@@ -1,17 +1,18 @@
 # Quality Dashboard
 
-This is a local, read-only dashboard for Jira spaces. It displays delivery health, PI and sprint analytics, an epic-first work-item hierarchy, and Zephyr quality for the selected space.
+This is a read-only dashboard for Jira and Zephyr Cloud. It starts with a secure connection page, discovers every Jira space available to the supplied account, and displays delivery health, PI and sprint analytics, an epic-first work-item hierarchy, and Zephyr quality.
 
 ## Start it
 
-1. Copy `.env.example` to `.env`.
-2. For a live Jira connection, set `JIRA_EMAIL` and a read-only Jira API token in `.env`. Keep the token private; `.env` is not committed.
-3. Set `ZEPHYR_API_BASE_URL` and `ZEPHYR_API_TOKEN` to enable the live Zephyr Cloud quality metrics. This tenant uses the EU API base URL.
-4. Run `npm start` and open `http://localhost:4173`.
+1. Run `npm start` and open `http://localhost:4173`.
+2. Enter the Jira Cloud URL, Jira email, Jira API token, Zephyr region, and Zephyr API token on the connection page.
+3. After both services validate, choose any accessible Jira space from the always-visible selector.
+
+Credentials live only in server memory for the current browser session. The HTTP-only session cookie expires after one hour, credentials are never saved to disk or returned to the browser, and Disconnect removes the server-side session immediately.
 
 ## Space, PI, and sprint configuration
 
-- Set `JIRA_SPACE_KEYS` to a comma-separated list such as `DD,LP`. The first space is selected by default.
+- Jira spaces are discovered automatically using the connected Jira account's Browse Projects access.
 - `JIRA_PI_FIELD_ID` identifies the Jira `PI` multi-select field. The dashboard-demo field is `customfield_10074`.
 - `JIRA_SPRINT_FIELD_ID` identifies the Jira `Sprints` multi-select field. The dashboard-demo field is `customfield_10075`.
 - The program view presents four PIs and six sprints per PI. Delivery metrics are calculated from the first PI and sprint value assigned to each non-epic work item.
@@ -21,18 +22,18 @@ This is a local, read-only dashboard for Jira spaces. It displays delivery healt
 - `GET /api/dashboard?space=DD` returns the selected space, the full configured space list, PI/sprint analytics, delivery metrics, epics, work items, and Zephyr quality data.
 - `GET /api/spaces` returns the configured space keys for lightweight discovery.
 
-Without credentials, the dashboard intentionally uses a verified local snapshot of Epic `DD-1`; the UI is still fully usable.
+Without an active connection session, the dashboard returns to the connection page.
 
 ## Live Jira permissions
 
-The Atlassian account backing the token needs only **Browse Projects** permission for the configured spaces. The server calls Jira from the local machine; credentials are never exposed to the browser.
+The Atlassian account backing the token needs only **Browse Projects** permission for the spaces it should display. Jira Cloud URLs are restricted to HTTPS `*.atlassian.net` hosts.
 
 ## Live Zephyr Cloud connection
 
-The server reads Zephyr Cloud directly from its regional REST API. It loads test cases, test cycles, test plans, executions, and status definitions for `JIRA_PROJECT_KEY`, then calculates the live pass/fail/blocked breakdown. The API token is used only by the local server and is never sent to the browser.
+The server reads Zephyr Cloud directly from its regional REST API. It loads test cases, test cycles, test plans, executions, and status definitions for the selected Jira space, then calculates the live pass/fail/blocked breakdown. After connection, the API token is used only by the server and is never returned to the browser.
 
 If the Zephyr API is unavailable, Jira delivery data remains usable and the quality panel clearly reports the Zephyr sync error instead of presenting placeholder data as live.
 
 ## Deploy on Render
 
-Create a Render Blueprint from this repository and provide the six Jira/Zephyr environment variables when prompted. Render uses `render.yaml` to create the Node web service, run its health check, and publish the dashboard over HTTPS. Keep `.env` local; hosted credentials belong in Render's secret environment settings.
+Create a Render Blueprint from this repository. Render uses `render.yaml` to create the Node web service, run its health check, and publish the dashboard over HTTPS. Client credentials are entered only on the connection page and remain in the running service's memory for one hour.
