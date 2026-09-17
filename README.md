@@ -8,6 +8,8 @@ This is a read-only dashboard for Jira and Zephyr Cloud. It starts with a secure
 2. Enter the Jira Cloud URL, Jira email, Jira API token, Zephyr region, and Zephyr API token on the connection page.
 3. After both services validate, choose any accessible Jira space from the always-visible selector.
 
+The form includes official token shortcuts. Jira opens Atlassian account security directly; Zephyr opens the connected tenant's API Access Tokens page once a valid Jira URL is entered, with SmartBear's official guide as the fallback.
+
 Credentials live only in server memory for the current browser session. The HTTP-only session cookie expires after one hour, credentials are never saved to disk or returned to the browser, and Disconnect removes the server-side session immediately.
 
 ## Space, PI, and sprint configuration

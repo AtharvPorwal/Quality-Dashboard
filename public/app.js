@@ -367,10 +367,12 @@ function renderConnect(message = '') {
           <label>Jira URL<input name="jiraUrl" type="url" inputmode="url" autocomplete="url" placeholder="https://your-company.atlassian.net" required></label>
           <label>Jira email<input name="jiraEmail" type="email" autocomplete="username" placeholder="you@company.com" required></label>
           <label>Jira API token<input name="jiraApiToken" type="password" autocomplete="off" placeholder="Enter Jira API token" required></label>
+          <a class="token-shortcut" href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener noreferrer"><span class="shortcut-icon">${icons.quality}</span><span><strong>Get a Jira API token</strong><small>Open Atlassian account security to create or copy a token</small></span><b aria-hidden="true">↗</b></a>
         </fieldset>
         <fieldset><legend><span>2</span> Zephyr Cloud</legend>
           <label>Zephyr region<select name="zephyrRegion" required><option value="">Select region</option><option value="EU">Europe</option><option value="US">United States</option><option value="AU">Australia</option><option value="DE">Germany</option></select></label>
           <label>Zephyr API token<input name="zephyrApiToken" type="password" autocomplete="off" placeholder="Enter Zephyr API token" required></label>
+          <a class="token-shortcut" id="zephyr-token-link" href="https://support.smartbear.com/zephyr-scale-cloud/docs/rest-api/generating-api-access-tokens.html" target="_blank" rel="noopener noreferrer"><span class="shortcut-icon">${icons.bolt}</span><span><strong>Get a Zephyr API token</strong><small id="zephyr-token-help">Enter your Jira URL above for a direct account link</small></span><b aria-hidden="true">↗</b></a>
         </fieldset>
         <p class="connect-error" id="connect-error" ${message ? '' : 'hidden'}>${esc(message)}</p>
         <button class="connect-submit" type="submit"><span>Connect and open dashboard</span>${icons.arrow}</button>
@@ -379,6 +381,22 @@ function renderConnect(message = '') {
     </section>
   </main>`;
   document.querySelector('#connect-form')?.addEventListener('submit', connect);
+  document.querySelector('[name="jiraUrl"]')?.addEventListener('input', updateZephyrTokenLink);
+}
+
+function updateZephyrTokenLink(event) {
+  const link = document.querySelector('#zephyr-token-link');
+  const help = document.querySelector('#zephyr-token-help');
+  if (!link || !help) return;
+  try {
+    const jiraUrl = new URL(event.target.value.trim());
+    if (jiraUrl.protocol !== 'https:' || !jiraUrl.hostname.toLowerCase().endsWith('.atlassian.net')) throw new Error('Not a Jira Cloud URL');
+    link.href = `${jiraUrl.origin}/plugins/servlet/ac/com.kanoah.test-manager/api-access-tokens`;
+    help.textContent = 'Open the Zephyr token page in your Jira account';
+  } catch {
+    link.href = 'https://support.smartbear.com/zephyr-scale-cloud/docs/rest-api/generating-api-access-tokens.html';
+    help.textContent = 'Enter your Jira URL above for a direct account link';
+  }
 }
 
 async function connect(event) {
