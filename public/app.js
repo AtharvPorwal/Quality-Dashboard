@@ -19,6 +19,7 @@ const icons = {
 };
 
 let dashboard;
+let selectedPi = 'all';
 
 function routeHref(path) {
   const space = dashboard?.space?.key || new URLSearchParams(location.search).get('space');
@@ -110,6 +111,11 @@ function statusMetricCards(metrics) {
 
 function renderOverview() {
   const { metrics: m, quality: q } = dashboard;
+  const selectedPiNumber = selectedPi === 'all' ? null : Number(selectedPi);
+  const selectedPiData = dashboard.program.pis.find(pi => pi.number === selectedPiNumber);
+  const progressMetrics = selectedPiData?.metrics || m;
+  const progressTotal = Math.max(progressMetrics.total, 1);
+  const progressLabel = selectedPiData ? selectedPiData.name : 'All PIs';
   const epicCount = dashboard.epics.filter(epic => epic.type === 'Epic').length;
   const statusTotal = Math.max(m.total, 1);
   const updated = new Date(dashboard.connection.updatedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -121,10 +127,10 @@ function renderOverview() {
 
     <section class="hero-grid">
       <article class="card health-card">
-        <div class="card-heading"><div><span class="kicker light">SPACE DELIVERY</span><h2>All program increments · ${esc(dashboard.space.key)}</h2></div><span class="pulse-dot">${jiraLiveLabel()}</span></div>
+        <div class="card-heading"><div><span class="kicker light">PROGRAM DELIVERY</span><h2>${esc(progressLabel)} · ${esc(dashboard.space.key)}</h2></div><div class="health-card-actions"><label class="pi-progress-filter"><span>View</span><select id="pi-progress-select" aria-label="Select program increment progress"><option value="all" ${selectedPi === 'all' ? 'selected' : ''}>All PIs</option>${dashboard.program.pis.map(pi => `<option value="${pi.number}" ${selectedPiData?.number === pi.number ? 'selected' : ''}>${esc(pi.name)}</option>`).join('')}</select></label><span class="pulse-dot">${jiraLiveLabel()}</span></div></div>
         <div class="health-content">
-          <div class="radial" style="--value:${m.completion}"><div><strong>${m.completion}%</strong><span>complete</span></div></div>
-          <div class="health-summary"><strong>${m.inProgress} stories in progress</strong><span>${m.done} delivered · ${m.todo} waiting</span><div class="hero-progress"><i class="done-segment" style="width:${pct(m.done, statusTotal)}%"></i><i class="active-segment" style="width:${pct(m.inProgress, statusTotal)}%"></i></div></div>
+          <div class="radial" style="--value:${progressMetrics.completion}"><div><strong>${progressMetrics.completion}%</strong><span>complete</span></div></div>
+          <div class="health-summary"><strong>${progressMetrics.inProgress} stories in progress</strong><span>${progressMetrics.done} delivered · ${progressMetrics.todo} waiting</span><div class="hero-progress"><i class="done-segment" style="width:${pct(progressMetrics.done, progressTotal)}%"></i><i class="active-segment" style="width:${pct(progressMetrics.inProgress, progressTotal)}%"></i></div></div>
         </div>
       </article>
 
@@ -434,6 +440,7 @@ async function disconnect() {
   try { await fetch('/api/disconnect', { method: 'POST' }); }
   finally {
     dashboard = undefined;
+    selectedPi = 'all';
     history.replaceState({}, '', '/connect');
     renderConnect('You have been disconnected.');
   }
@@ -442,7 +449,12 @@ async function disconnect() {
 function bindGlobalEvents() {
   document.querySelector('#refresh')?.addEventListener('click', load);
   document.querySelector('#disconnect')?.addEventListener('click', disconnect);
+  document.querySelector('#pi-progress-select')?.addEventListener('change', event => {
+    selectedPi = event.target.value;
+    renderOverview();
+  });
   document.querySelector('#space-select')?.addEventListener('change', event => {
+    selectedPi = 'all';
     const url = new URL(location.href);
     url.searchParams.set('space', event.target.value);
     history.pushState({}, '', `${url.pathname}${url.search}`);
@@ -482,6 +494,7 @@ async function load() {
     }
     dashboard = result;
     if (!response.ok && !dashboard.metrics) throw new Error(dashboard.error || 'Dashboard request failed');
+    if (selectedPi !== 'all' && !dashboard.program.pis.some(pi => pi.number === Number(selectedPi))) selectedPi = 'all';
     if (location.pathname === '/connect') history.replaceState({}, '', '/');
     if (!selectedSpace || selectedSpace !== dashboard.space.key) {
       const url = new URL(location.href);
