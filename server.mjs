@@ -6,12 +6,8 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 const port = Number(process.env.PORT || 4173);
-const DEFAULT_JIRA_BASE_URL = 'https://atharvporwal051.atlassian.net';
-const DEFAULT_ZEPHYR_API_BASE_URL = 'https://eu.api.zephyrscale.smartbear.com/v2';
 const piFieldId = () => process.env.JIRA_PI_FIELD_ID || 'customfield_10074';
 const sprintFieldId = () => process.env.JIRA_SPRINT_FIELD_ID || 'customfield_10075';
-const jiraBaseUrl = () => process.env.JIRA_BASE_URL || DEFAULT_JIRA_BASE_URL;
-const zephyrApiBaseUrl = () => process.env.ZEPHYR_API_BASE_URL || DEFAULT_ZEPHYR_API_BASE_URL;
 
 function configuredSpaceKeys() {
   const configured = process.env.JIRA_SPACE_KEYS || process.env.JIRA_PROJECT_KEY || 'DD';
@@ -206,7 +202,7 @@ function buildDashboard(issues, space, live, notice, quality = pendingZephyrQual
     space: {
       key: space.key,
       name: space.name || space.key,
-      jiraBrowseUrl: live ? `${jiraBaseUrl().replace(/\/$/, '')}/browse` : null
+      jiraBrowseUrl: process.env.JIRA_BASE_URL ? `${process.env.JIRA_BASE_URL.replace(/\/$/, '')}/browse` : null
     },
     spaces: spaces.length ? spaces : spaceKeys.map(key => ({ key, name: key === space.key ? (space.name || key) : key })),
     program: buildProgramAnalytics(workItems, workflowStatuses),
@@ -219,9 +215,8 @@ function buildDashboard(issues, space, live, notice, quality = pendingZephyrQual
 }
 
 async function fetchJiraIssues(spaceKey) {
-  const { JIRA_EMAIL, JIRA_API_TOKEN } = process.env;
-  const JIRA_BASE_URL = jiraBaseUrl();
-  if (!JIRA_EMAIL || !JIRA_API_TOKEN) {
+  const { JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN } = process.env;
+  if (!JIRA_BASE_URL || !JIRA_EMAIL || !JIRA_API_TOKEN) {
     return {
       issues: spaceKey === 'DD' ? issueSeed : [],
       space: { key: spaceKey, name: spaceKey },
@@ -297,9 +292,8 @@ async function fetchJiraIssues(spaceKey) {
 
 async function fetchSpaceCatalog(selectedSpace) {
   const spaceKeys = configuredSpaceKeys();
-  const { JIRA_EMAIL, JIRA_API_TOKEN } = process.env;
-  const JIRA_BASE_URL = jiraBaseUrl();
-  if (!JIRA_EMAIL || !JIRA_API_TOKEN) {
+  const { JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN } = process.env;
+  if (!JIRA_BASE_URL || !JIRA_EMAIL || !JIRA_API_TOKEN) {
     return spaceKeys.map(key => ({ key, name: key === selectedSpace.key ? selectedSpace.name : key }));
   }
   const auth = Buffer.from(`${JIRA_EMAIL}:${JIRA_API_TOKEN}`).toString('base64');
@@ -317,10 +311,17 @@ async function fetchSpaceCatalog(selectedSpace) {
   }));
 }
 
+function zephyrRegion(baseUrl) {
+  const host = new URL(baseUrl).hostname;
+  if (host.startsWith('eu.')) return 'EU';
+  if (host.startsWith('au.')) return 'AU';
+  if (host.startsWith('de.')) return 'DE';
+  return 'US';
+}
+
 async function fetchZephyrCollection(resource, spaceKey) {
-  const { ZEPHYR_API_TOKEN } = process.env;
-  const ZEPHYR_API_BASE_URL = zephyrApiBaseUrl();
-  if (!ZEPHYR_API_TOKEN) throw new Error('Zephyr API token is missing.');
+  const { ZEPHYR_API_BASE_URL, ZEPHYR_API_TOKEN } = process.env;
+  if (!ZEPHYR_API_BASE_URL || !ZEPHYR_API_TOKEN) throw new Error('Zephyr API URL or token is missing.');
   const values = [];
   let startAt = 0;
   const maxResults = 1000;
@@ -330,7 +331,7 @@ async function fetchZephyrCollection(resource, spaceKey) {
     url.searchParams.set('maxResults', String(maxResults));
     url.searchParams.set('startAt', String(startAt));
     const response = await fetch(url, { headers: { Authorization: `Bearer ${ZEPHYR_API_TOKEN}`, Accept: 'application/json' } });
-    if (!response.ok) throw new Error(`Zephyr ${resource} returned ${response.status}. Check the API token and project permissions.`);
+    if (!response.ok) throw new Error(`Zephyr ${resource} returned ${response.status}. Check the regional API URL, token, and project permissions.`);
     const payload = await response.json();
     const page = Array.isArray(payload.values) ? payload.values : [];
     values.push(...page);
@@ -341,8 +342,8 @@ async function fetchZephyrCollection(resource, spaceKey) {
 }
 
 async function fetchZephyrQuality(spaceKey) {
-  const { ZEPHYR_API_TOKEN } = process.env;
-  if (!ZEPHYR_API_TOKEN) return pendingZephyrQuality('Zephyr credentials are not configured.', spaceKey);
+  const { ZEPHYR_API_BASE_URL, ZEPHYR_API_TOKEN } = process.env;
+  if (!ZEPHYR_API_BASE_URL || !ZEPHYR_API_TOKEN) return pendingZephyrQuality('Zephyr credentials are not configured.', spaceKey);
   const [testCases, cycles, plans, executions, statuses] = await Promise.all([
     fetchZephyrCollection('testcases', spaceKey),
     fetchZephyrCollection('testcycles', spaceKey),
@@ -369,7 +370,7 @@ async function fetchZephyrQuality(spaceKey) {
     notExecuted,
     passRate: executions.length ? Math.round((passed / executions.length) * 100) : 0,
     status: 'Live Zephyr Cloud sync',
-    source: 'Zephyr Cloud API',
+    source: `Zephyr Cloud API (${zephyrRegion(ZEPHYR_API_BASE_URL)} region)`,
     cycles: cycles.map(cycle => ({ key: cycle.key, name: cycle.name, status: statusNames.get(cycle.status?.id) || 'Unknown' })),
     plans: plans.map(plan => ({ key: plan.key, name: plan.name, status: statusNames.get(plan.status?.id) || 'Unknown' }))
   };
