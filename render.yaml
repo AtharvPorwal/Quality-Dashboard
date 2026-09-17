@@ -10,14 +10,16 @@ services:
       - key: NODE_VERSION
         value: 22.12.0
       - key: JIRA_BASE_URL
-        sync: false
+        value: https://atharvporwal051.atlassian.net
       - key: JIRA_EMAIL
         sync: false
       - key: JIRA_API_TOKEN
         sync: false
       - key: JIRA_PROJECT_KEY
-        sync: false
+        value: DD
+      - key: JIRA_SPACE_KEYS
+        value: DD
       - key: ZEPHYR_API_BASE_URL
-        sync: false
+        value: https://eu.api.zephyrscale.smartbear.com/v2
       - key: ZEPHYR_API_TOKEN
         sync: false

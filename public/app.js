@@ -45,7 +45,6 @@ function shell(content, active = 'overview') {
     <main class="workspace">
       <header class="topbar">
         <div class="mobile-brand"><span class="brand-mark">Q</span><strong>Quality Dashboard</strong></div>
-        <label class="space-switch"><span>Space</span><select id="space-select" aria-label="Select Jira space">${dashboard.spaces.map(space => `<option value="${esc(space.key)}" ${space.key === dashboard.space.key ? 'selected' : ''}>${esc(space.name || space.key)} (${esc(space.key)})</option>`).join('')}</select></label>
         <button class="icon-button" id="refresh" aria-label="Refresh dashboard" title="Refresh dashboard">${icons.refresh}</button>
       </header>
       ${content}
@@ -345,12 +344,6 @@ function renderNotFound() {
 
 function bindGlobalEvents() {
   document.querySelector('#refresh')?.addEventListener('click', load);
-  document.querySelector('#space-select')?.addEventListener('change', event => {
-    const url = new URL(location.href);
-    url.searchParams.set('space', event.target.value);
-    history.pushState({}, '', `${url.pathname}${url.search}`);
-    load();
-  });
 }
 
 function jiraLiveLabel() {
